@@ -187,3 +187,29 @@ func TestSummaryFailureIsReported(t *testing.T) {
 		t.Error("summary mail failure must be reported")
 	}
 }
+
+func TestFailedAdoptGetsNoGroupChanges(t *testing.T) {
+	c := cfg(func(c *config.Config) { c.Sync.AdoptExisting = true })
+	tgt := &fakeTgt{
+		managed:  map[string]IPAUser{},
+		existing: map[string]IPAUser{"legacy": {UID: "legacy"}},
+		failOn:   map[string]bool{"add[google2ipa-managed]:legacy": true},
+	}
+	r := RunOnce(context.Background(), c, fakeSrc{users: []GoogleUser{gu("legacy@example.com")}}, tgt, &fakeNotifier{}, now, false, quiet)
+	if slices.Contains(tgt.calls, "add[staff]:legacy") || r.OK() {
+		t.Errorf("calls=%v errors=%v", tgt.calls, r.Errors)
+	}
+}
+
+type lookupErrTgt struct{ fakeTgt }
+
+func (*lookupErrTgt) Lookup(string) (*IPAUser, error) { return nil, errors.New("ipa down") }
+
+func TestLookupErrorAborts(t *testing.T) {
+	tgt := &lookupErrTgt{fakeTgt{managed: map[string]IPAUser{"gone": {UID: "gone", Managed: true}}}}
+	users := []GoogleUser{gu("a@example.com"), gu("b@example.com"), gu("c@example.com")}
+	r := RunOnce(context.Background(), cfg(nil), fakeSrc{users: users}, tgt, &fakeNotifier{}, now, false, quiet)
+	if r.OK() || len(tgt.calls) != 0 {
+		t.Errorf("errors=%v calls=%v", r.Errors, tgt.calls)
+	}
+}

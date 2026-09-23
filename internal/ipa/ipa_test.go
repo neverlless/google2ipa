@@ -103,7 +103,7 @@ func TestManagedUsersAndLookup(t *testing.T) {
 			if c.Opts["uid"] == "ghost" {
 				return nil, notFound()
 			}
-			return map[string]any{"value": "legacy", "result": map[string]any{"uid": []string{"legacy"}, "sn": []string{"L"}, "memberof_group": []string{"staff"}}}, nil
+			return map[string]any{"value": "legacy", "result": map[string]any{"uid": []string{"legacy"}, "sn": []string{"L"}, "memberof_group": []string{"staff"}, "preserved": true}}, nil
 		}
 		return groupOK(c)
 	})
@@ -122,7 +122,7 @@ func TestManagedUsersAndLookup(t *testing.T) {
 	if got, err := cl.Lookup("ghost"); got != nil || err != nil {
 		t.Errorf("ghost = %v, %v", got, err)
 	}
-	if got, err := cl.Lookup("legacy"); err != nil || got == nil || got.Managed {
+	if got, err := cl.Lookup("legacy"); err != nil || got == nil || got.Managed || !got.Preserved {
 		t.Errorf("legacy = %+v, %v", got, err)
 	}
 }

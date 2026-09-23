@@ -157,3 +157,11 @@ func TestBuildMailMismatchIsConflict(t *testing.T) {
 		t.Error("conflicting user must get no group changes")
 	}
 }
+
+func TestBuildPreservedUserNeedsAdmin(t *testing.T) {
+	ipa := map[string]IPAUser{"gone": {UID: "gone", Locked: true, Preserved: true}}
+	p := Build([]User{u("gone")}, nil, ipa, cfg(func(c *config.Config) { c.Sync.AdoptExisting = true }), now)
+	if len(p.Adopt)+len(p.Unmanaged)+len(p.Create) != 0 || len(p.Conflicts) != 1 || !strings.Contains(p.Conflicts[0], "user-undel") {
+		t.Errorf("plan = %+v", p)
+	}
+}

@@ -68,18 +68,27 @@ func RunOnce(ctx context.Context, cfg *config.Config, src Source, tgt Target, n 
 		p.fail(fmt.Errorf("freeipa: %w; no changes made", err))
 		return r
 	}
+	var unknown []string
 	for _, u := range users {
-		if _, ok := ipa[u.UID]; ok {
-			continue
+		if _, ok := ipa[u.UID]; !ok {
+			unknown = append(unknown, u.UID)
 		}
-		got, err := tgt.Lookup(u.UID)
-		if err != nil {
-			p.fail(fmt.Errorf("freeipa: %w; no changes made", err))
-			return r
+	}
+	var lookupErr error
+	forEach(cfg.Sync.Concurrency, unknown, func(uid string) {
+		got, err := tgt.Lookup(uid)
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		switch {
+		case err != nil && lookupErr == nil:
+			lookupErr = err
+		case got != nil:
+			ipa[uid] = *got
 		}
-		if got != nil {
-			ipa[u.UID] = *got
-		}
+	})
+	if lookupErr != nil {
+		p.fail(fmt.Errorf("freeipa: %w; no changes made", lookupErr))
+		return r
 	}
 
 	r.Plan = Build(users, skipped, ipa, cfg, now)
@@ -137,9 +146,13 @@ func RunOnce(ctx context.Context, cfg *config.Config, src Source, tgt Target, n 
 			p.fail(fmt.Errorf("welcome mail to %s: %w", u.Email, err))
 		}
 	})
+	failedAdopt := map[string]bool{}
 	forEach(workers, plan.Adopt, func(uid string) {
 		if err := tgt.AddToGroups(uid, []string{cfg.Sync.ManagedGroup}); err != nil {
 			p.fail(fmt.Errorf("adopt %s: %w", uid, err))
+			p.mu.Lock()
+			failedAdopt[uid] = true
+			p.mu.Unlock()
 			return
 		}
 		log.Info("adopted", "uid", uid)
@@ -152,7 +165,7 @@ func RunOnce(ctx context.Context, cfg *config.Config, src Source, tgt Target, n 
 		log.Info("enabled", "uid", uid)
 	})
 	forEach(workers, slices.Sorted(maps.Keys(plan.AddGroups)), func(uid string) {
-		if slices.ContainsFunc(plan.Create, func(u User) bool { return u.UID == uid }) && !created[uid] {
+		if failedAdopt[uid] || slices.ContainsFunc(plan.Create, func(u User) bool { return u.UID == uid }) && !created[uid] {
 			return
 		}
 		if err := tgt.AddToGroups(uid, plan.AddGroups[uid]); err != nil {
@@ -160,6 +173,9 @@ func RunOnce(ctx context.Context, cfg *config.Config, src Source, tgt Target, n 
 		}
 	})
 	forEach(workers, slices.Sorted(maps.Keys(plan.RemoveGroups)), func(uid string) {
+		if failedAdopt[uid] {
+			return
+		}
 		if err := tgt.RemoveFromGroups(uid, plan.RemoveGroups[uid]); err != nil {
 			p.fail(fmt.Errorf("groups %s: %w", uid, err))
 		}

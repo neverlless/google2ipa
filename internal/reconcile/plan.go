@@ -33,6 +33,9 @@ func Build(users []User, skipped []string, ipa map[string]IPAUser, cfg *config.C
 		switch {
 		case !exists:
 			p.Create = append(p.Create, u)
+		case cur.Preserved:
+			p.Conflicts = append(p.Conflicts, fmt.Sprintf("uid %s is a deleted (preserved) FreeIPA user; restore it with: ipa user-undel %s && ipa group-add-member %s --users=%s", u.UID, u.UID, cfg.Sync.ManagedGroup, u.UID))
+			continue
 		case !cur.Managed && !cfg.Sync.AdoptExisting:
 			p.Unmanaged = append(p.Unmanaged, u.UID)
 			continue

@@ -24,12 +24,13 @@ type User struct {
 
 // IPAUser is the part of a FreeIPA user google2ipa cares about.
 type IPAUser struct {
-	UID      string
-	Managed  bool       // member of sync.managed_group
-	Locked   bool       // nsaccountlock
-	LockedAt *time.Time // krbPrincipalExpiration, set by google2ipa on disable
-	Email    string     // first mail value, used to detect uid reuse
-	Groups   []string
+	UID       string
+	Managed   bool       // member of sync.managed_group
+	Locked    bool       // nsaccountlock
+	LockedAt  *time.Time // krbPrincipalExpiration, set by google2ipa on disable
+	Email     string     // first mail value, used to detect uid reuse
+	Preserved bool       // deleted with --preserve; only an admin can restore it
+	Groups    []string
 }
 
 type Plan struct {
