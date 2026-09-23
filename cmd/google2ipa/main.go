@@ -26,6 +26,7 @@ func run() int {
 	cfgPath := flag.String("config", "config.yaml", "path to the configuration file")
 	dryRun := flag.Bool("dry-run", false, "print the planned changes without applying them")
 	interval := flag.Duration("interval", 0, "repeat the sync every interval (e.g. 30m); 0 runs once")
+	timeout := flag.Duration("timeout", 30*time.Minute, "abort a single pass that runs longer than this")
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
 	if *showVersion {
@@ -48,18 +49,28 @@ func run() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// failed reports a pass that could not start, including to the admin.
+	failed := func(err error) bool {
+		log.Error(err.Error())
+		if !*dryRun {
+			if err := mailer.Summary(reconcile.Report{Errors: []string{err.Error()}}); err != nil {
+				log.Error("summary mail", "err", err)
+			}
+		}
+		return false
+	}
 	once := func() bool {
-		src, err := google.New(ctx, cfg.Google, cfg.Sync.GoogleGroups())
+		pctx, cancel := context.WithTimeout(ctx, *timeout)
+		defer cancel()
+		src, err := google.New(pctx, cfg.Google, cfg.Sync.GoogleGroups())
 		if err != nil {
-			log.Error(err.Error())
-			return false
+			return failed(err)
 		}
 		tgt, err := ipa.Connect(cfg.FreeIPA, cfg.Sync.ManagedGroup)
 		if err != nil {
-			log.Error(err.Error())
-			return false
+			return failed(err)
 		}
-		r := reconcile.RunOnce(ctx, cfg, src, tgt, mailer, time.Now(), *dryRun, log)
+		r := reconcile.RunOnce(pctx, cfg, src, tgt, mailer, time.Now(), *dryRun, log)
 		log.Info("sync finished", "ok", r.OK(), "errors", len(r.Errors))
 		return r.OK()
 	}
