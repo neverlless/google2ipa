@@ -1,0 +1,20 @@
+google2ipa sync report{{if .DryRun}} (dry run, nothing was changed){{end}}
+{{with .Plan}}
+Created:   {{len .Create}}{{range .Create}}
+  + {{.UID}} <{{.Email}}>{{end}}
+Adopted:   {{len .Adopt}}{{range .Adopt}}
+  ~ {{.}}{{end}}
+Enabled:   {{len .Enable}}{{range .Enable}}
+  ^ {{.}}{{end}}
+Disabled:  {{len .Disable}}{{range .Disable}}
+  - {{.}}{{end}}
+Deleted:   {{len .Delete}}{{range .Delete}}
+  x {{.}}{{end}}
+Group changes: {{len .AddGroups}} added, {{len .RemoveGroups}} removed
+{{if .Unmanaged}}Existing FreeIPA users not managed by google2ipa (set sync.adopt_existing to take over): {{range .Unmanaged}}{{.}} {{end}}
+{{end}}{{if .Braked}}
+SAFETY BRAKE: too many users would have been disabled; disable/delete were skipped.
+{{end}}{{end}}{{if .Errors}}
+Errors ({{len .Errors}}):{{range .Errors}}
+  ! {{.}}{{end}}
+{{end}}
