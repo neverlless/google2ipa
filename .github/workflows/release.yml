@@ -49,5 +49,5 @@ jobs:
           build-args: VERSION=${{ steps.meta.outputs.version }}
           provenance: true
           sbom: true
-      - uses: sigstore/cosign-installer@v4
+      - uses: sigstore/cosign-installer@v4.1.2
       - run: cosign sign --yes ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }}
