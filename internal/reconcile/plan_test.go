@@ -2,6 +2,7 @@ package reconcile
 
 import (
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -119,5 +120,40 @@ func TestBuildSafetyBrake(t *testing.T) {
 	p = Build([]User{u("a")}, nil, small, cfg(func(c *config.Config) { c.Sync.MaxDisablePercent = 20 }), now)
 	if p.Braked || len(p.Disable) != 1 {
 		t.Fatalf("single: %+v", p)
+	}
+}
+
+func TestBuildRepairsHalfFinishedLock(t *testing.T) {
+	future := now.Add(24 * time.Hour)
+	ipa := map[string]IPAUser{
+		"half":     {UID: "half", Managed: true, LockedAt: ago(time.Hour)},            // unlocked, stamp left behind
+		"contract": {UID: "contract", Managed: true, Locked: true, LockedAt: &future}, // admin-set future expiry
+	}
+	p := Build([]User{u("half"), u("contract")}, nil, ipa, cfg(nil), now)
+	if !slices.Equal(p.Enable, []string{"half"}) {
+		t.Errorf("Enable = %v, want [half]", p.Enable)
+	}
+}
+
+func TestBuildMailMismatchIsConflict(t *testing.T) {
+	ipa := map[string]IPAUser{
+		"john": {UID: "john", Managed: true, Locked: true, LockedAt: ago(time.Hour), Email: "john@a.com"},
+		"old":  {UID: "old", Email: "old@a.com"},
+		"same": {UID: "same", Managed: true, Locked: true, LockedAt: ago(time.Hour), Email: "Same@Example.com"},
+	}
+	users := []User{
+		{UID: "john", GoogleUser: GoogleUser{Email: "john@b.com"}},
+		{UID: "old", GoogleUser: GoogleUser{Email: "old@b.com"}},
+		{UID: "same", GoogleUser: GoogleUser{Email: "same@example.com"}},
+	}
+	p := Build(users, nil, ipa, cfg(func(c *config.Config) { c.Sync.AdoptExisting = true }), now)
+	if !slices.Equal(p.Enable, []string{"same"}) || len(p.Adopt) != 0 {
+		t.Errorf("Enable=%v Adopt=%v", p.Enable, p.Adopt)
+	}
+	if len(p.Conflicts) != 2 || !strings.Contains(p.Conflicts[0], "john@a.com") {
+		t.Errorf("Conflicts = %v", p.Conflicts)
+	}
+	if _, ok := p.AddGroups["john"]; ok {
+		t.Error("conflicting user must get no group changes")
 	}
 }

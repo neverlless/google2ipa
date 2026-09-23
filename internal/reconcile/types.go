@@ -28,6 +28,7 @@ type IPAUser struct {
 	Managed  bool       // member of sync.managed_group
 	Locked   bool       // nsaccountlock
 	LockedAt *time.Time // krbPrincipalExpiration, set by google2ipa on disable
+	Email    string     // first mail value, used to detect uid reuse
 	Groups   []string
 }
 
@@ -40,7 +41,8 @@ type Plan struct {
 	Delete       []string
 	AddGroups    map[string][]string // uid -> groups
 	RemoveGroups map[string][]string
-	Braked       bool // disable/delete suppressed by the safety brake
+	Braked       bool     // disable/delete suppressed by the safety brake
+	Conflicts    []string // uid matches but the FreeIPA mail belongs to someone else; left alone
 }
 
 func (p Plan) Empty() bool {

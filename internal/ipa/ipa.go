@@ -100,6 +100,9 @@ func (cl *Client) toIPAUser(u freeipa.User) reconcile.IPAUser {
 	if u.Nsaccountlock != nil {
 		out.Locked = *u.Nsaccountlock
 	}
+	if u.Mail != nil && len(*u.Mail) > 0 {
+		out.Email = (*u.Mail)[0]
+	}
 	if u.MemberofGroup != nil {
 		out.Groups = *u.MemberofGroup
 	}

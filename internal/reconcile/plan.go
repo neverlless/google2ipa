@@ -1,8 +1,10 @@
 package reconcile
 
 import (
+	"fmt"
 	"maps"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/neverlless/google2ipa/internal/config"
@@ -34,9 +36,15 @@ func Build(users []User, skipped []string, ipa map[string]IPAUser, cfg *config.C
 		case !cur.Managed && !cfg.Sync.AdoptExisting:
 			p.Unmanaged = append(p.Unmanaged, u.UID)
 			continue
+		case cur.Email != "" && !strings.EqualFold(cur.Email, u.Email):
+			// Same uid, different person (reused local part or email): never
+			// hand an old account, its groups and password to someone else.
+			p.Conflicts = append(p.Conflicts, fmt.Sprintf("uid %s belongs to %s in FreeIPA but to %s in Google; left alone", u.UID, cur.Email, u.Email))
+			continue
 		case !cur.Managed:
 			p.Adopt = append(p.Adopt, u.UID)
-		case cur.Locked && cur.LockedAt != nil:
+		case cur.LockedAt != nil && !cur.LockedAt.After(now):
+			// Locked by google2ipa, or a previous enable/disable half-failed.
 			p.Enable = append(p.Enable, u.UID)
 		}
 

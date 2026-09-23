@@ -94,7 +94,7 @@ func TestManagedUsersAndLookup(t *testing.T) {
 		switch c.Method {
 		case "user_find":
 			return map[string]any{"count": 1, "truncated": false, "result": []any{map[string]any{
-				"uid": []string{"john"}, "givenname": []string{"John"}, "sn": []string{"Doe"},
+				"uid": []string{"john"}, "givenname": []string{"John"}, "sn": []string{"Doe"}, "mail": []string{"John@Example.com"},
 				"nsaccountlock":          true,
 				"krbprincipalexpiration": []any{map[string]string{"__datetime__": "20260901000000Z"}},
 				"memberof_group":         []string{"google2ipa-managed", "staff"},
@@ -116,7 +116,7 @@ func TestManagedUsersAndLookup(t *testing.T) {
 		t.Fatal(err)
 	}
 	j := users["john"]
-	if !j.Managed || !j.Locked || j.LockedAt == nil || !j.LockedAt.Equal(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)) {
+	if j.Email != "John@Example.com" || !j.Managed || !j.Locked || j.LockedAt == nil || !j.LockedAt.Equal(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)) {
 		t.Errorf("john = %+v", j)
 	}
 	if got, err := cl.Lookup("ghost"); got != nil || err != nil {
