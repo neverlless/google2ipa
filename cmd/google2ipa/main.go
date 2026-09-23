@@ -66,7 +66,7 @@ func run() int {
 		if err != nil {
 			return failed(err)
 		}
-		tgt, err := ipa.Connect(cfg.FreeIPA, cfg.Sync.ManagedGroup)
+		tgt, err := ipa.Connect(pctx, cfg.FreeIPA, cfg.Sync.ManagedGroup)
 		if err != nil {
 			return failed(err)
 		}

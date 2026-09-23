@@ -1,6 +1,7 @@
 package ipa
 
 import (
+	"context"
 	"encoding/json"
 	"encoding/pem"
 	"net/http"
@@ -83,7 +84,7 @@ func groupOK(c call) (any, *freeipa.Error) {
 
 func TestConnectMissingManagedGroup(t *testing.T) {
 	cfg, _ := fake(t, func(c call) (any, *freeipa.Error) { return nil, notFound() })
-	_, err := Connect(cfg, "google2ipa-managed")
+	_, err := Connect(context.Background(), cfg, "google2ipa-managed")
 	if err == nil || !strings.Contains(err.Error(), "ipa group-add google2ipa-managed") {
 		t.Fatalf("err = %v", err)
 	}
@@ -107,7 +108,7 @@ func TestManagedUsersAndLookup(t *testing.T) {
 		}
 		return groupOK(c)
 	})
-	cl, err := Connect(cfg, "google2ipa-managed")
+	cl, err := Connect(context.Background(), cfg, "google2ipa-managed")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +138,7 @@ func TestCreateUser(t *testing.T) {
 		}
 		return groupOK(c)
 	})
-	cl, err := Connect(cfg, "google2ipa-managed")
+	cl, err := Connect(context.Background(), cfg, "google2ipa-managed")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +165,7 @@ func TestAddToGroupsAlreadyMember(t *testing.T) {
 		}
 		return groupOK(c)
 	})
-	cl, err := Connect(cfg, "google2ipa-managed")
+	cl, err := Connect(context.Background(), cfg, "google2ipa-managed")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +186,7 @@ func TestDisableEnableDelete(t *testing.T) {
 		}
 		return groupOK(c)
 	})
-	cl, err := Connect(cfg, "google2ipa-managed")
+	cl, err := Connect(context.Background(), cfg, "google2ipa-managed")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,5 +213,47 @@ func TestDisableEnableDelete(t *testing.T) {
 	want := "group_show user_mod krbprincipalexpiration=20260923100000Z user_disable user_enable user_mod krbprincipalexpiration= user_del"
 	if strings.Join(seq, " ") != want {
 		t.Errorf("calls:\n got %s\nwant %s", strings.Join(seq, " "), want)
+	}
+}
+
+func TestCreateRollsBackWhenManagedGroupFails(t *testing.T) {
+	cfg, calls := fake(t, func(c call) (any, *freeipa.Error) {
+		switch c.Method {
+		case "user_add":
+			return map[string]any{"value": "x", "result": map[string]any{"uid": []string{"x"}, "sn": []string{"x"}}}, nil
+		case "group_add_member":
+			return nil, &freeipa.Error{Code: 2100, Name: "ACIError", Message: "denied"}
+		case "user_del":
+			return map[string]any{"value": []string{"x"}, "result": map[string]any{"failed": []string{}}}, nil
+		}
+		return groupOK(c)
+	})
+	cl, err := Connect(context.Background(), cfg, "google2ipa-managed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cl.CreateUser(reconcile.User{UID: "x", GoogleUser: reconcile.GoogleUser{Email: "x@example.com"}}); err == nil {
+		t.Fatal("want error")
+	}
+	last := calls()[len(calls())-1]
+	if last.Method != "user_del" || last.Opts["preserve"] == true {
+		t.Errorf("want non-preserving rollback, last call = %+v", last)
+	}
+}
+
+func TestRetryStopsOnCancel(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadGateway) // transport-level failure: retried
+	}))
+	defer srv.Close()
+	old := backoff
+	backoff = func(int) time.Duration { return 5 * time.Second }
+	defer func() { backoff = old }()
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	_, err := Connect(ctx, config.FreeIPA{URL: srv.URL, Username: "u", Password: "fake", InsecureSkipVerify: true}, "g")
+	if err == nil || time.Since(start) > 2*time.Second {
+		t.Errorf("err=%v after %v", err, time.Since(start))
 	}
 }

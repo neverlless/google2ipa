@@ -3,6 +3,7 @@
 package ipa
 
 import (
+	"context"
 	"os"
 	"testing"
 	"time"
@@ -17,7 +18,7 @@ func TestIntegrationLifecycle(t *testing.T) {
 	if cfg.URL == "" {
 		t.Skip("G2I_IT_URL not set; run hack/freeipa-up.sh")
 	}
-	cl, err := Connect(cfg, "google2ipa-managed")
+	cl, err := Connect(context.Background(), cfg, "google2ipa-managed")
 	if err != nil {
 		t.Fatal(err)
 	}

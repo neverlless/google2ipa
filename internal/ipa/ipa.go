@@ -2,6 +2,7 @@
 package ipa
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -20,6 +21,7 @@ import (
 const genTime = "20060102150405Z" // LDAP generalized time
 
 type Client struct {
+	ctx     context.Context // bounds retry waits for this pass
 	c       *freeipa.Client
 	managed string
 }
@@ -33,7 +35,7 @@ func apiErr(err error, code int) bool {
 }
 
 // retry retries only transport-level failures, never FreeIPA API errors.
-func retry[T any](fn func() (T, error)) (T, error) {
+func retry[T any](ctx context.Context, fn func() (T, error)) (T, error) {
 	var v T
 	var err error
 	for i := range 3 {
@@ -41,7 +43,11 @@ func retry[T any](fn func() (T, error)) (T, error) {
 			return v, err
 		}
 		if i < 2 {
-			time.Sleep(backoff(i))
+			select {
+			case <-ctx.Done():
+				return v, errors.Join(err, ctx.Err())
+			case <-time.After(backoff(i)):
+			}
 		}
 	}
 	return v, err
@@ -72,18 +78,18 @@ func transport(cfg config.FreeIPA) (*http.Transport, error) {
 }
 
 // Connect logs in and checks that the managed group exists.
-func Connect(cfg config.FreeIPA, managedGroup string) (*Client, error) {
+func Connect(ctx context.Context, cfg config.FreeIPA, managedGroup string) (*Client, error) {
 	tr, err := transport(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("freeipa tls: %w", err)
 	}
-	c, err := retry(func() (*freeipa.Client, error) {
+	c, err := retry(ctx, func() (*freeipa.Client, error) {
 		return freeipa.Connect(cfg.Host(), tr, cfg.Username, cfg.Password)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("freeipa login to %s: %w", cfg.Host(), err)
 	}
-	_, err = retry(func() (*freeipa.GroupShowResult, error) {
+	_, err = retry(ctx, func() (*freeipa.GroupShowResult, error) {
 		return c.GroupShow(&freeipa.GroupShowArgs{Cn: managedGroup}, &freeipa.GroupShowOptionalArgs{})
 	})
 	if apiErr(err, freeipa.NotFoundCode) {
@@ -92,7 +98,7 @@ func Connect(cfg config.FreeIPA, managedGroup string) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("freeipa group_show %s: %w", managedGroup, err)
 	}
-	return &Client{c: c, managed: managedGroup}, nil
+	return &Client{ctx: ctx, c: c, managed: managedGroup}, nil
 }
 
 func (cl *Client) toIPAUser(u freeipa.User) reconcile.IPAUser {
@@ -118,7 +124,7 @@ func (cl *Client) toIPAUser(u freeipa.User) reconcile.IPAUser {
 }
 
 func (cl *Client) ManagedUsers() (map[string]reconcile.IPAUser, error) {
-	res, err := retry(func() (*freeipa.UserFindResult, error) {
+	res, err := retry(cl.ctx, func() (*freeipa.UserFindResult, error) {
 		return cl.c.UserFind("", &freeipa.UserFindArgs{}, &freeipa.UserFindOptionalArgs{
 			InGroup:   &[]string{cl.managed},
 			Sizelimit: freeipa.Int(0),
@@ -139,7 +145,7 @@ func (cl *Client) ManagedUsers() (map[string]reconcile.IPAUser, error) {
 }
 
 func (cl *Client) Lookup(uid string) (*reconcile.IPAUser, error) {
-	res, err := retry(func() (*freeipa.UserShowResult, error) {
+	res, err := retry(cl.ctx, func() (*freeipa.UserShowResult, error) {
 		return cl.c.UserShow(&freeipa.UserShowArgs{}, &freeipa.UserShowOptionalArgs{UID: &uid, All: freeipa.Bool(true)})
 	})
 	if apiErr(err, freeipa.NotFoundCode) {
@@ -173,7 +179,12 @@ func (cl *Client) CreateUser(u reconcile.User) (string, error) {
 		return "", fmt.Errorf("user_add: %w", err)
 	}
 	if err := cl.AddToGroups(u.UID, []string{cl.managed}); err != nil {
-		return "", fmt.Errorf("user created but not added to managed group, add it manually: %w", err)
+		// Roll back: an unmanaged account would never be touched again and its
+		// one-time password would be lost. The next pass creates it cleanly.
+		if derr := cl.Delete(u.UID, false); derr != nil {
+			return "", fmt.Errorf("user created but not added to managed group (%w), and rollback failed: %v; add it manually and reset its password", err, derr)
+		}
+		return "", fmt.Errorf("add to managed group failed, creation rolled back: %w", err)
 	}
 	if res.Result.Randompassword == nil {
 		return "", nil
