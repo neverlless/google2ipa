@@ -58,7 +58,7 @@ func RunOnce(ctx context.Context, cfg *config.Config, src Source, tgt Target, n 
 		p.fail(fmt.Errorf("google: %w; no changes made", err))
 		return r
 	}
-	users, skipped, errs := Resolve(gusers, cfg.Sync.Username, cfg.Sync.ExcludeUsers)
+	users, skipped, errs := Resolve(gusers, cfg.Sync.Username, cfg.Sync.ExcludeUsers, cfg.Sync.MaxUsernameLength)
 	for _, e := range errs {
 		p.fail(e)
 	}

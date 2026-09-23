@@ -21,7 +21,7 @@ func deriveUID(email, mode string) string {
 
 // Resolve derives uids. Invalid or colliding uids are returned in skipped:
 // they count as present in Google but are never modified.
-func Resolve(users []GoogleUser, mode string, exclude []string) (resolved []User, skipped []string, errs []error) {
+func Resolve(users []GoogleUser, mode string, exclude []string, maxLen int) (resolved []User, skipped []string, errs []error) {
 	byUID := map[string][]GoogleUser{}
 	for _, u := range users {
 		uid := deriveUID(u.Email, mode)
@@ -41,6 +41,9 @@ func Resolve(users []GoogleUser, mode string, exclude []string) (resolved []User
 		case !uidPattern.MatchString(uid):
 			skipped = append(skipped, uid)
 			errs = append(errs, fmt.Errorf("skip %s: %q is not a valid FreeIPA uid", us[0].Email, uid))
+		case len(uid) > maxLen:
+			skipped = append(skipped, uid)
+			errs = append(errs, fmt.Errorf("skip %s: uid %q is longer than %d characters (raise sync.max_username_length and ipa config-mod --maxusername)", us[0].Email, uid, maxLen))
 		case len(us) > 1:
 			skipped = append(skipped, uid)
 			emails := make([]string, len(us))

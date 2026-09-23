@@ -181,3 +181,22 @@ func TestExampleConfigLoads(t *testing.T) {
 		t.Fatalf("config.example.yaml must load with only FREEIPA_PASSWORD set: %v", err)
 	}
 }
+
+func TestUnsetVarNamedOnce(t *testing.T) {
+	body := minimal + "notify:\n  smtp:\n    password: ${G2I_TEST_PASS}\n"
+	_, err := Load(write(t, body))
+	if err == nil || strings.Count(err.Error(), "G2I_TEST_PASS") != 1 {
+		t.Fatalf("want the variable named once, got %v", err)
+	}
+}
+
+func TestMaxUsernameLength(t *testing.T) {
+	t.Setenv("G2I_TEST_PASS", "x")
+	cfg, err := Load(write(t, minimal))
+	if err != nil || cfg.Sync.MaxUsernameLength != 32 {
+		t.Fatalf("default = %v, %v", cfg, err)
+	}
+	if _, err := Load(write(t, minimal+"sync:\n  max_username_length: 0\n")); err == nil || !strings.Contains(err.Error(), "max_username_length") {
+		t.Errorf("want validation error, got %v", err)
+	}
+}

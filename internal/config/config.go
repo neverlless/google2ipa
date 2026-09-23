@@ -62,6 +62,7 @@ type Sync struct {
 	Username          string              `yaml:"username"`
 	AdoptExisting     bool                `yaml:"adopt_existing"`
 	MaxDisablePercent int                 `yaml:"max_disable_percent"`
+	MaxUsernameLength int                 `yaml:"max_username_length"`
 	Concurrency       int                 `yaml:"concurrency"`
 }
 
@@ -149,7 +150,7 @@ func ParseDuration(s string) (time.Duration, error) {
 func Default() *Config {
 	return &Config{
 		Google:      Google{Customer: "my_customer"},
-		Sync:        Sync{ManagedGroup: "google2ipa-managed", Username: "local_part", MaxDisablePercent: 20, Concurrency: 4},
+		Sync:        Sync{ManagedGroup: "google2ipa-managed", Username: "local_part", MaxDisablePercent: 20, MaxUsernameLength: 32, Concurrency: 4},
 		Offboarding: Offboarding{Disable: true, DeleteAfter: Duration(30 * 24 * time.Hour), Preserve: true},
 		Notify: Notify{
 			SMTP:    SMTP{Port: 587},
@@ -176,7 +177,7 @@ func Load(path string) (*Config, error) {
 	expandScalars(&doc, func(m string) string {
 		name := envRef.FindStringSubmatch(m)[1]
 		v, ok := os.LookupEnv(name)
-		if !ok {
+		if !ok && !slices.Contains(missing, name) {
 			missing = append(missing, name)
 		}
 		return v
@@ -272,6 +273,9 @@ func (c *Config) validate() error {
 	}
 	if c.Sync.MaxDisablePercent < 0 || c.Sync.MaxDisablePercent > 100 {
 		errs = append(errs, errors.New("sync.max_disable_percent must be between 0 and 100"))
+	}
+	if c.Sync.MaxUsernameLength < 1 {
+		errs = append(errs, errors.New("sync.max_username_length must be >= 1 (FreeIPA default is 32)"))
 	}
 	if c.Sync.Concurrency < 1 {
 		errs = append(errs, errors.New("sync.concurrency must be >= 1"))

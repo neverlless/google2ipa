@@ -2,6 +2,7 @@ package reconcile
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -13,7 +14,7 @@ func TestResolve(t *testing.T) {
 		{Email: "bad+tag@example.com"}, // '+' is invalid in a uid
 		{Email: "admin@example.com"},   // excluded
 	}
-	got, skipped, errs := Resolve(in, "local_part", []string{"admin"})
+	got, skipped, errs := Resolve(in, "local_part", []string{"admin"}, 32)
 	if len(got) != 1 || got[0].UID != "john.doe" {
 		t.Fatalf("resolved = %+v", got)
 	}
@@ -24,12 +25,20 @@ func TestResolve(t *testing.T) {
 		t.Errorf("errs = %v", errs)
 	}
 
-	got, skipped, _ = Resolve(in, "email", []string{"admin.example.com"})
+	got, skipped, _ = Resolve(in, "email", []string{"admin.example.com"}, 32)
 	uids := []string{}
 	for _, u := range got {
 		uids = append(uids, u.UID)
 	}
 	if !slices.Equal(uids, []string{"jane.example.com", "jane.other.org", "john.doe.example.com"}) || !slices.Equal(skipped, []string{"bad+tag.example.com"}) {
 		t.Errorf("email mode: %v skipped %v", uids, skipped)
+	}
+}
+
+func TestResolveTooLong(t *testing.T) {
+	long := "a234567890123456789012345678901234@example.com" // 34-char local part
+	got, skipped, errs := Resolve([]GoogleUser{{Email: long}, {Email: "ok@example.com"}}, "local_part", nil, 32)
+	if len(got) != 1 || len(skipped) != 1 || len(errs) != 1 || !strings.Contains(errs[0].Error(), "maxusername") {
+		t.Fatalf("got=%v skipped=%v errs=%v", got, skipped, errs)
 	}
 }
