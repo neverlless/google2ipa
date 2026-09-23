@@ -23,11 +23,11 @@ docker run -d -t --name g2i-ipa -h "$HOST" \
   --read-only --tmpfs /run --tmpfs /tmp -v g2i-ipa-data:/data \
   ${publish[@]+"${publish[@]}"} \
   "$IMAGE" ipa-server-install -U -r "$REALM" -n "$DOMAIN" \
-  --ds-password=$PW --admin-password=$PW --no-ntp --no-host-dns >/dev/null
+  --ds-password=$PW --admin-password=$PW --no-ntp --no-host-dns --skip-mem-check >/dev/null
 
 echo "waiting for FreeIPA install (5-15 min)..." >&2
 timeout 2400 bash -c 'until docker logs g2i-ipa 2>&1 | grep -q "FreeIPA server configured."; do
-  if [ -z "$(docker ps -q -f name=g2i-ipa)" ]; then docker logs g2i-ipa 2>&1 | tail -50; exit 1; fi
+  if [ -z "$(docker ps -q -f name=g2i-ipa)" ]; then docker logs g2i-ipa 2>&1 | tail -50 >&2; exit 1; fi
   sleep 15; done'
 
 ipa() { docker exec -i g2i-ipa "$@"; }
