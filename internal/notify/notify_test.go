@@ -44,14 +44,14 @@ func TestWelcome(t *testing.T) {
 	cfg.Welcome = config.Welcome{Enabled: true, Subject: "Ваш аккаунт"}
 	m, out := mailer(t, cfg)
 	u := reconcile.User{UID: "john", GoogleUser: reconcile.GoogleUser{Email: "john@example.com", GivenName: "John"}}
-	if err := m.Welcome(u, "R4nd0m"); err != nil {
+	if err := m.Welcome(u, "fake-generated-value"); err != nil {
 		t.Fatal(err)
 	}
 	if len(*out) != 1 {
 		t.Fatalf("sent %d", len(*out))
 	}
 	s := (*out)[0]
-	for _, want := range []string{"From: it@example.com\r\n", "To: john@example.com\r\n", "Subject: =?utf-8?q?", "Date: ", "Content-Type: text/plain; charset=utf-8", "Hello John,\r\n", "Temporary password: R4nd0m", "https://ipa.example.com"} {
+	for _, want := range []string{"From: it@example.com\r\n", "To: john@example.com\r\n", "Subject: =?utf-8?q?", "Date: ", "Content-Type: text/plain; charset=utf-8", "Hello John,\r\n", "Temporary password: fake-generated-value", "https://ipa.example.com"} {
 		if !strings.Contains(s.msg, want) {
 			t.Errorf("message missing %q:\n%s", want, s.msg)
 		}
