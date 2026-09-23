@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `sync.max_username_length` (default 32): too-long usernames are skipped with a clear error.
+- Preserved (deleted) FreeIPA users that reappear in Google are reported with the restore command.
+
+### Fixed
+
+- A user whose managed-group assignment fails right after creation is rolled back instead of being orphaned.
+- Group changes are no longer applied to users whose adoption failed.
+- The same persistent errors are mailed once instead of on every `--interval` pass.
+- FreeIPA retry waits stop when the pass is cancelled or times out.
+- First-run lookups of existing FreeIPA users run in parallel.
+- The unset-variable config error names each variable once.
+
 ## [0.1.0] - 2026-09-23
 
 Initial public release.

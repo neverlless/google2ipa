@@ -42,6 +42,8 @@ sync:
   # Abort offboarding if more than this percentage of managed users would be
   # disabled in one pass (protects against an empty/partial Google response). 0 = off.
   max_disable_percent: 20
+  # Skip Google users whose username would exceed FreeIPA's maximum (ipa config-show).
+  max_username_length: 32
   concurrency: 4
 
 offboarding:

@@ -44,6 +44,7 @@ Each run reads all active Google users, reads the FreeIPA users in the
 | Disabled by google2ipa for longer than `delete_after` | **Delete** (preserved by default, restorable with `ipa user-undel`) |
 | Member of a mapped Google group | **Add/remove** the mapped FreeIPA groups |
 | Exists in FreeIPA but not managed | Left alone (or adopted with `adopt_existing: true`) |
+| Deleted earlier (preserved) and back in Google | Reported with the `ipa user-undel` command to restore it |
 | More than `max_disable_percent` of users would be disabled | **Safety brake:** nothing is disabled, the run fails and the admin is notified |
 
 Accounts that an administrator locked by hand are never unlocked by google2ipa. If a
@@ -138,7 +139,7 @@ google2ipa [--config config.yaml] [--dry-run] [--interval 30m] [--timeout 30m] [
 | Exit code | Meaning |
 | --- | --- |
 | 0 | Success |
-| 1 | The run finished with errors (see logs); other users were still processed |
+| 1 | The run finished with errors (see logs); other users were still processed. Also for `--dry-run` when the plan contains errors |
 | 2 | Invalid configuration or flags |
 
 ## Configuration reference
@@ -166,6 +167,7 @@ unset variable is a configuration error. Keys are validated: a typo fails at sta
 | `sync.username` | `local_part` | `local_part` (`john@x.com` → `john`) or `email` (→ `john.x.com`) |
 | `sync.adopt_existing` | `false` | Take over existing FreeIPA users with the same username |
 | `sync.max_disable_percent` | `20` | Safety brake threshold; `0` turns it off |
+| `sync.max_username_length` | `32` | Longer usernames are skipped with an error; match FreeIPA's `ipa config-show` → Maximum username length |
 | `sync.concurrency` | `4` | Parallel FreeIPA operations |
 | `offboarding.disable` | `true` | Lock users who left Google |
 | `offboarding.delete_after` | `30d` | Delete this long after locking (`0` = never). Units: `d`, `h`, `m` |
@@ -174,7 +176,7 @@ unset variable is a configuration error. Keys are validated: a typo fails at sta
 | `notify.welcome.enabled` | `false` | Mail new users their username and one-time password |
 | `notify.welcome.subject` | `Your account is ready` | Subject line |
 | `notify.welcome.template_file` | built-in | Go `text/template` with `.UID .Email .GivenName .FamilyName .FullName .Password .URL` |
-| `notify.admin.enabled` / `to` | `false` | One summary mail per run that changed something or failed, including runs that could not reach Google or FreeIPA |
+| `notify.admin.enabled` / `to` | `false` | One summary mail per run that changed something or failed, including runs that could not reach Google or FreeIPA. The same unchanged errors are mailed once, not on every `--interval` pass |
 | `log.format` / `level` | `json` / `info` | `json` or `text`; `debug`…`error` |
 
 ## FAQ
