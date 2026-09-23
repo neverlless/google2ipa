@@ -148,3 +148,29 @@ func TestEnvValuesStayStrings(t *testing.T) {
 		}
 	}
 }
+
+func TestEnvInTypedFields(t *testing.T) {
+	t.Setenv("G2I_TEST_PASS", "x")
+	t.Setenv("G2I_PORT", "2525")
+	t.Setenv("G2I_ADOPT", "true")
+	body := minimal + "notify:\n  smtp:\n    port: ${G2I_PORT}\nsync:\n  adopt_existing: ${G2I_ADOPT}\n"
+	cfg, err := Load(write(t, body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Notify.SMTP.Port != 2525 || !cfg.Sync.AdoptExisting {
+		t.Errorf("port=%d adopt=%v", cfg.Notify.SMTP.Port, cfg.Sync.AdoptExisting)
+	}
+}
+
+func TestGroupNamesLowercased(t *testing.T) {
+	t.Setenv("G2I_TEST_PASS", "x")
+	body := minimal + "sync:\n  managed_group: G2I-Managed\n  default_groups: [Staff]\n  group_mapping:\n    dev@example.com: [Admins]\n"
+	cfg, err := Load(write(t, body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Sync.ManagedGroup != "g2i-managed" || cfg.Sync.DefaultGroups[0] != "staff" || cfg.Sync.GroupMapping["dev@example.com"][0] != "admins" {
+		t.Errorf("not lowercased: %+v", cfg.Sync)
+	}
+}

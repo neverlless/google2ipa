@@ -204,7 +204,11 @@ func Load(path string) (*Config, error) {
 
 func expandScalars(n *yaml.Node, repl func(string) string) {
 	if n.Kind == yaml.ScalarNode {
+		whole := n.Style == 0 && envRef.FindString(n.Value) == n.Value
 		n.Value = envRef.ReplaceAllStringFunc(n.Value, repl)
+		if whole {
+			n.Tag = "" // re-resolve, so ${PORT} can fill an int and ${FLAG} a bool
+		}
 	}
 	for _, c := range n.Content {
 		expandScalars(c, repl)
@@ -222,9 +226,12 @@ func lower(in []string) []string {
 func (c *Config) normalize() {
 	c.Google.Domains = lower(c.Google.Domains)
 	c.Sync.ExcludeUsers = lower(c.Sync.ExcludeUsers)
+	// FreeIPA stores group names in lowercase.
+	c.Sync.ManagedGroup = strings.ToLower(strings.TrimSpace(c.Sync.ManagedGroup))
+	c.Sync.DefaultGroups = lower(c.Sync.DefaultGroups)
 	m := make(map[string][]string, len(c.Sync.GroupMapping))
 	for k, v := range c.Sync.GroupMapping {
-		m[strings.ToLower(strings.TrimSpace(k))] = v
+		m[strings.ToLower(strings.TrimSpace(k))] = lower(v)
 	}
 	c.Sync.GroupMapping = m
 }
