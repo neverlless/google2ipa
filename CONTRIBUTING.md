@@ -29,18 +29,20 @@ New sync behavior belongs in `internal/reconcile/plan.go` with a table test in `
 
 ## Integration test
 
-`hack/freeipa-up.sh` starts a disposable FreeIPA container (5–15 minutes) and
-creates the least-privilege service account described in
-[docs/freeipa-setup.md](docs/freeipa-setup.md):
+The integration tests run against a real FreeIPA server in a local container.
+They are not part of CI. `hack/freeipa-up.sh` creates the least-privilege
+service account described in [docs/freeipa-setup.md](docs/freeipa-setup.md).
+The server is kept in the `g2i-ipa-data` volume: the first run installs it
+(5–15 minutes), later runs only start it.
 
 ```sh
-eval "$(./hack/freeipa-up.sh | tail -1)"          # Linux / CI (edits /etc/hosts)
+eval "$(./hack/freeipa-up.sh | tail -1)"                                          # Linux (edits /etc/hosts)
 eval "$(IPA_HOST=g2i-ipa.orb.local SKIP_HOSTS=1 ./hack/freeipa-up.sh | tail -1)"  # OrbStack on macOS
 go test -tags integration -run Integration -v ./internal/ipa/
-docker rm -f g2i-ipa
+docker stop g2i-ipa        # keeps the installed server; RESET=1 reinstalls from scratch
 ```
 
-It also runs weekly in GitHub Actions (`Integration` workflow).
+Run them when you change `internal/ipa` or the sync logic.
 
 ## Pull requests
 

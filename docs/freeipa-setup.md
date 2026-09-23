@@ -55,7 +55,7 @@ the service account, or rotate the password before it expires.
 *Group Administrators* covers group membership, and *Stage User
 Administrators* is needed to move deleted users to the preserved container
 (`offboarding.preserve: true`). These exact commands are exercised by the
-integration test in CI (`hack/freeipa-up.sh`). FreeIPA protects the `admins` group; mapping a
+integration tests (`hack/freeipa-up.sh`). FreeIPA protects the `admins` group; mapping a
 Google group to `admins` needs the service account to be a member of `admins` itself.
 
 ## 3. TLS

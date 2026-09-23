@@ -182,7 +182,7 @@ func (cl *Client) CreateUser(u reconcile.User) (string, error) {
 		// Roll back: an unmanaged account would never be touched again and its
 		// one-time password would be lost. The next pass creates it cleanly.
 		if derr := cl.Delete(u.UID, false); derr != nil {
-			return "", fmt.Errorf("user created but not added to managed group (%w), and rollback failed: %v; add it manually and reset its password", err, derr)
+			return "", fmt.Errorf("user created but not added to managed group (%w), and rollback failed: %w; add it manually and reset its password", err, derr)
 		}
 		return "", fmt.Errorf("add to managed group failed, creation rolled back: %w", err)
 	}
