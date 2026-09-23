@@ -54,7 +54,7 @@ func TestUsers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg := config.Google{Customer: "my_customer", OrgUnits: []string{"/Eng"}, Domains: []string{"example.com"}}
+	cfg := config.Google{Customer: "my_customer", OrgUnits: []string{"/eng"}, Domains: []string{"example.com"}}
 	src := &Source{svc: svc, cfg: cfg, groups: []string{"devops@example.com"}}
 
 	users, err := src.Users(context.Background())

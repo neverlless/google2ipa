@@ -71,7 +71,8 @@ func (s *Source) keep(u *admin.User) bool {
 		}
 	}
 	if len(s.cfg.OrgUnits) > 0 && !slices.ContainsFunc(s.cfg.OrgUnits, func(ou string) bool {
-		return u.OrgUnitPath == ou || strings.HasPrefix(u.OrgUnitPath, strings.TrimSuffix(ou, "/")+"/")
+		path, ou := strings.ToLower(u.OrgUnitPath), strings.ToLower(ou)
+		return path == ou || strings.HasPrefix(path, strings.TrimSuffix(ou, "/")+"/")
 	}) {
 		return false
 	}
