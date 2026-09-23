@@ -1,0 +1,11 @@
+services:
+  google2ipa:
+    image: ghcr.io/neverlless/google2ipa:latest
+    command: ["--config", "/etc/google2ipa/config.yaml", "--interval", "30m"]
+    restart: unless-stopped
+    environment:
+      FREEIPA_PASSWORD: ${FREEIPA_PASSWORD}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+    volumes:
+      - ./config.yaml:/etc/google2ipa/config.yaml:ro
+      - ./sa.json:/etc/google2ipa/sa.json:ro

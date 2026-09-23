@@ -1,0 +1,69 @@
+# google2ipa configuration. ${VAR} references are replaced with environment
+# variables; an unset variable is an error. Only the keys marked "required"
+# must be set, everything else shows its default.
+
+google:
+  # Service account key with domain-wide delegation. Leave empty to use
+  # Application Default Credentials (e.g. GKE Workload Identity) together
+  # with service_account_email.
+  credentials_file: /etc/google2ipa/sa.json
+  service_account_email: ""
+  # Required. Admin user the service account impersonates (read-only admin is enough).
+  admin_email: admin@example.com
+  customer: my_customer
+  # Optional Directory API query, e.g. "isSuspended=false orgUnitPath='/Engineering'".
+  query: ""
+  # Only sync users in these OUs (sub-OUs included). Empty = all.
+  org_units: []
+  # Only sync users whose primary email is in these domains. Empty = all.
+  domains: []
+
+freeipa:
+  url: https://ipa.example.com          # required, https only
+  username: google2ipa-svc              # required
+  password: ${FREEIPA_PASSWORD}         # required
+  ca_file: ""                           # e.g. /etc/ipa/ca.crt if the CA is not in the system trust store
+  insecure_skip_verify: false
+
+sync:
+  # FreeIPA group that marks users owned by google2ipa. Must exist.
+  managed_group: google2ipa-managed
+  # Groups every synced user is added to (never removed from).
+  default_groups: []
+  # Google group email -> FreeIPA groups. Membership is added and removed.
+  group_mapping:
+    devops@example.com: [admins]
+  # FreeIPA usernames google2ipa never touches.
+  exclude_users: [admin]
+  # local_part: john@example.com -> john; email: john@example.com -> john.example.com
+  username: local_part
+  # Take over FreeIPA users that already exist with the same uid.
+  adopt_existing: false
+  # Abort offboarding if more than this percentage of managed users would be
+  # disabled in one pass (protects against an empty/partial Google response). 0 = off.
+  max_disable_percent: 20
+  concurrency: 4
+
+offboarding:
+  disable: true           # lock users that left Google Workspace
+  delete_after: 30d       # delete this long after locking; 0 = never
+  preserve: true          # delete into "preserved users" (ipa user-undel restores)
+
+notify:
+  smtp:
+    host: smtp.example.com
+    port: 587             # STARTTLS is used when the server offers it
+    username: google2ipa@example.com
+    password: ${SMTP_PASSWORD}
+    from: it@example.com
+  welcome:
+    enabled: false        # mail new users their login and one-time password
+    subject: Your account is ready
+    template_file: ""     # Go text/template; fields: .UID .Email .GivenName .FamilyName .FullName .Password .URL
+  admin:
+    enabled: false        # one summary mail per pass with changes or errors
+    to: [it@example.com]
+
+log:
+  format: json            # json | text
+  level: info             # debug | info | warn | error

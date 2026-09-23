@@ -1,0 +1,69 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: google2ipa
+type: Opaque
+stringData:
+  FREEIPA_PASSWORD: change-me
+  SMTP_PASSWORD: change-me
+  sa.json: |
+    { "type": "service_account", "...": "paste the key JSON here" }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: google2ipa
+data:
+  config.yaml: |
+    google:
+      credentials_file: /etc/google2ipa/secret/sa.json
+      admin_email: admin@example.com
+    freeipa:
+      url: https://ipa.example.com
+      username: google2ipa-svc
+      password: ${FREEIPA_PASSWORD}
+    sync:
+      default_groups: [ipausers]
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: google2ipa
+spec:
+  schedule: "*/30 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 1800
+      template:
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: google2ipa
+              image: ghcr.io/neverlless/google2ipa:latest
+              args: ["--config", "/etc/google2ipa/config.yaml"]
+              envFrom:
+                - secretRef: {name: google2ipa}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              resources:
+                requests: {cpu: 10m, memory: 32Mi}
+                limits: {memory: 128Mi}
+              volumeMounts:
+                - {name: config, mountPath: /etc/google2ipa/config.yaml, subPath: config.yaml}
+                - {name: secret, mountPath: /etc/google2ipa/secret, readOnly: true}
+          volumes:
+            - name: config
+              configMap: {name: google2ipa}
+            - name: secret
+              secret:
+                secretName: google2ipa
+                items: [{key: sa.json, path: sa.json}]

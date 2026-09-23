@@ -1,0 +1,6 @@
+.git
+dist
+docs
+deploy
+*.md
+coverage.out
