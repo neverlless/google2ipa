@@ -1,0 +1,38 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect instead?
+    validations: {required: true}
+  - type: input
+    id: version
+    attributes:
+      label: google2ipa version
+      placeholder: output of `google2ipa --version`
+    validations: {required: true}
+  - type: input
+    id: ipa
+    attributes:
+      label: FreeIPA / IdM version
+      placeholder: e.g. FreeIPA 4.12.2 on RHEL 9
+  - type: dropdown
+    id: deploy
+    attributes:
+      label: How do you run it?
+      options: [Kubernetes CronJob, Docker / Compose, Binary, Other]
+  - type: textarea
+    id: config
+    attributes:
+      label: Configuration
+      description: Relevant parts of config.yaml. **Remove passwords and keys.**
+      render: yaml
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: "Output with `log.level: debug`, preferably from a `--dry-run`."
+      render: text
