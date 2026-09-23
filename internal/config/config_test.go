@@ -174,3 +174,10 @@ func TestGroupNamesLowercased(t *testing.T) {
 		t.Errorf("not lowercased: %+v", cfg.Sync)
 	}
 }
+
+func TestExampleConfigLoads(t *testing.T) {
+	t.Setenv("FREEIPA_PASSWORD", "x")
+	if _, err := Load("../../config.example.yaml"); err != nil {
+		t.Fatalf("config.example.yaml must load with only FREEIPA_PASSWORD set: %v", err)
+	}
+}

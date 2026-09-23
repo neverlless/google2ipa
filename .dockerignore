@@ -4,3 +4,8 @@ docs
 deploy
 *.md
 coverage.out
+sa.json
+config.yaml
+.env
+ipa-ca.crt
+*.pem

@@ -117,7 +117,7 @@ func sendMail(addr string, auth smtp.Auth, from string, to []string, msg []byte)
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
 		return err
 	}
@@ -125,7 +125,7 @@ func sendMail(addr string, auth smtp.Auth, from string, to []string, msg []byte)
 	if err != nil {
 		return err
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 	if ok, _ := c.Extension("STARTTLS"); ok && port != "465" {
 		if err := c.StartTLS(&tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}); err != nil {
 			return err

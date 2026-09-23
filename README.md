@@ -40,13 +40,15 @@ Each run reads all active Google users, reads the FreeIPA users in the
 | --- | --- |
 | In Google, not in FreeIPA | **Create** the user with a FreeIPA-generated one-time password, add to the managed group and configured groups, optionally mail the password |
 | In Google, locked by google2ipa earlier | **Enable** again |
-| Managed, no longer in Google (deleted or suspended) | **Disable**, record the time in `krbPrincipalExpiration` |
+| Managed, no longer synced from Google (deleted, suspended, archived, or dropped by the query/OU/domain filters) | **Disable**, record the time in `krbPrincipalExpiration` |
 | Disabled by google2ipa for longer than `delete_after` | **Delete** (preserved by default, restorable with `ipa user-undel`) |
 | Member of a mapped Google group | **Add/remove** the mapped FreeIPA groups |
 | Exists in FreeIPA but not managed | Left alone (or adopted with `adopt_existing: true`) |
 | More than `max_disable_percent` of users would be disabled | **Safety brake:** nothing is disabled, the run fails and the admin is notified |
 
-Accounts that an administrator locked by hand are never unlocked by google2ipa.
+Accounts that an administrator locked by hand are never unlocked by google2ipa. If a
+username now belongs to a different Google email than the FreeIPA account's `mail`
+(a reused name), the account is left alone and reported as an error.
 
 ## Features
 
@@ -130,7 +132,7 @@ cosign verify ghcr.io/neverlless/google2ipa:<version> \
 ### Command line
 
 ```text
-google2ipa [--config config.yaml] [--dry-run] [--interval 30m] [--version]
+google2ipa [--config config.yaml] [--dry-run] [--interval 30m] [--timeout 30m] [--version]
 ```
 
 | Exit code | Meaning |
@@ -146,7 +148,7 @@ unset variable is a configuration error. Keys are validated: a typo fails at sta
 
 | Key | Default | Description |
 | --- | --- | --- |
-| `google.credentials_file` | — | Service account key (JSON). Empty: use Application Default Credentials |
+| `google.credentials_file` | — | Service account key (JSON). Empty: use Application Default Credentials together with `service_account_email` |
 | `google.service_account_email` | — | Service account to impersonate when `credentials_file` is empty (Workload Identity) |
 | `google.admin_email` | **required** | Admin user the service account acts as |
 | `google.customer` | `my_customer` | Workspace customer ID |
@@ -168,11 +170,11 @@ unset variable is a configuration error. Keys are validated: a typo fails at sta
 | `offboarding.disable` | `true` | Lock users who left Google |
 | `offboarding.delete_after` | `30d` | Delete this long after locking (`0` = never). Units: `d`, `h`, `m` |
 | `offboarding.preserve` | `true` | Delete into preserved users (restorable) |
-| `notify.smtp.*` | port `587` | `host`, `port`, `username`, `password`, `from`; STARTTLS when offered |
+| `notify.smtp.*` | port `587` | `host`, `port`, `username`, `password`, `from`; STARTTLS when offered, implicit TLS on port 465; 30 s timeout |
 | `notify.welcome.enabled` | `false` | Mail new users their username and one-time password |
 | `notify.welcome.subject` | `Your account is ready` | Subject line |
 | `notify.welcome.template_file` | built-in | Go `text/template` with `.UID .Email .GivenName .FamilyName .FullName .Password .URL` |
-| `notify.admin.enabled` / `to` | `false` | One summary mail per run that changed something or failed |
+| `notify.admin.enabled` / `to` | `false` | One summary mail per run that changed something or failed, including runs that could not reach Google or FreeIPA |
 | `log.format` / `level` | `json` / `info` | `json` or `text`; `debug`…`error` |
 
 ## FAQ
@@ -185,7 +187,7 @@ reported and left alone unless you set `adopt_existing: true`.
 the run before FreeIPA is touched. If the list looks too small, the safety
 brake skips all disabling.
 
-**How do I restore a deleted user?** `ipa user-find --preserved=true`, then `ipa user-undel <uid>`.
+**How do I restore a deleted user?** See [restoring a deleted user](docs/freeipa-setup.md#restoring-a-deleted-user).
 
 **Does it sync passwords?** No. Users set their FreeIPA password on first login.
 Syncing Google passwords is not possible through the Google APIs.

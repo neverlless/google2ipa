@@ -122,11 +122,11 @@ func TestStalledSMTPTimesOut(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 	go func() { // accept and never speak
 		c, err := ln.Accept()
 		if err == nil {
-			defer c.Close()
+			defer func() { _ = c.Close() }()
 			time.Sleep(5 * time.Second)
 		}
 	}()
@@ -172,14 +172,14 @@ func fakeSMTP(t *testing.T) (port int, got <-chan string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { ln.Close() })
+	t.Cleanup(func() { _ = ln.Close() })
 	ch := make(chan string, 1)
 	go func() {
 		c, err := ln.Accept()
 		if err != nil {
 			return
 		}
-		defer c.Close()
+		defer func() { _ = c.Close() }()
 		tp := textproto.NewConn(c)
 		var rec strings.Builder
 		_ = tp.PrintfLine("220 fake")

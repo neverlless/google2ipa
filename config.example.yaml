@@ -52,9 +52,9 @@ offboarding:
 notify:
   smtp:
     host: smtp.example.com
-    port: 587             # STARTTLS is used when the server offers it
-    username: google2ipa@example.com
-    password: ${SMTP_PASSWORD}
+    port: 587             # STARTTLS when offered; 465 = implicit TLS
+    username: ""          # empty = no SMTP auth
+    password: ""          # e.g. ${SMTP_PASSWORD} once mail is enabled
     from: it@example.com
   welcome:
     enabled: false        # mail new users their login and one-time password

@@ -178,7 +178,7 @@ func TestDryRunLogsEveryAction(t *testing.T) {
 
 type failingNotifier struct{ fakeNotifier }
 
-func (failingNotifier) Summary(Report) error { return errors.New("smtp down") }
+func (*failingNotifier) Summary(Report) error { return errors.New("smtp down") }
 
 func TestSummaryFailureIsReported(t *testing.T) {
 	tgt := &fakeTgt{managed: map[string]IPAUser{}, existing: map[string]IPAUser{}}

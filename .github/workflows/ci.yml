@@ -11,6 +11,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with: {go-version: stable}
+      - run: go mod tidy -diff
       - run: go vet ./...
       - run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
       - run: go tool cover -func=coverage.out | tail -1

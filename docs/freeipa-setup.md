@@ -96,10 +96,13 @@ dsconf -D "cn=Directory Manager" ldap://localhost config replace nsslapd-sizelim
 ```sh
 ipa user-find --preserved=true
 ipa user-undel jdoe
+ipa group-add-member google2ipa-managed --users=jdoe
 ```
 
-The user comes back locked. Run google2ipa again: if the user is in Google, it
-is unlocked.
+Deleting removes all group memberships, so the user comes back locked and
+outside the managed group; the last command hands it back to google2ipa. On the
+next run, if the user is in Google, it is unlocked and its mapped groups are restored.
+Until then google2ipa reports it as an existing unmanaged user.
 
 ## Migration
 
