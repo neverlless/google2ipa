@@ -123,7 +123,7 @@ func (cl *Client) ManagedUsers() (map[string]reconcile.IPAUser, error) {
 		return nil, fmt.Errorf("list managed users: %w", err)
 	}
 	if res.Truncated {
-		return nil, errors.New("list managed users: result truncated by the FreeIPA search size limit; raise it with ipa config-mod --searchrecordslimit")
+		return nil, errors.New("list managed users: result truncated by the directory size limit; see docs/freeipa-setup.md#large-directories")
 	}
 	out := make(map[string]reconcile.IPAUser, len(res.Result))
 	for _, u := range res.Result {
