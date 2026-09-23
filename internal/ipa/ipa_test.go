@@ -63,7 +63,7 @@ func fake(t *testing.T, h handler) (config.FreeIPA, func() []call) {
 	if err := os.WriteFile(ca, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: srv.Certificate().Raw}), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	return config.FreeIPA{URL: srv.URL, Username: "svc", Password: "pw", CAFile: ca}, func() []call {
+	return config.FreeIPA{URL: srv.URL, Username: "svc", Password: "fake", CAFile: ca}, func() []call {
 		mu.Lock()
 		defer mu.Unlock()
 		return append([]call(nil), calls...)
@@ -130,7 +130,7 @@ func TestManagedUsersAndLookup(t *testing.T) {
 func TestCreateUser(t *testing.T) {
 	cfg, calls := fake(t, func(c call) (any, *freeipa.Error) {
 		if c.Method == "user_add" {
-			return map[string]any{"value": "nameless", "result": map[string]any{"uid": []string{"nameless"}, "sn": []string{"nameless"}, "randompassword": "R4nd0m"}}, nil
+			return map[string]any{"value": "nameless", "result": map[string]any{"uid": []string{"nameless"}, "sn": []string{"nameless"}, "randompassword": "fake-generated-value"}}, nil
 		}
 		if c.Method == "group_add_member" {
 			return map[string]any{"completed": 1, "failed": map[string]any{"member": map[string]any{"user": []any{}, "group": []any{}}}, "result": map[string]any{}}, nil
@@ -142,7 +142,7 @@ func TestCreateUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	pw, err := cl.CreateUser(reconcile.User{UID: "nameless", GoogleUser: reconcile.GoogleUser{Email: "nameless@example.com"}})
-	if err != nil || pw != "R4nd0m" {
+	if err != nil || pw != "fake-generated-value" {
 		t.Fatalf("pw=%q err=%v", pw, err)
 	}
 	var add call

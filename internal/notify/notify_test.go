@@ -219,11 +219,11 @@ func TestSendMailRealSMTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := m.Welcome(reconcile.User{UID: "a", GoogleUser: reconcile.GoogleUser{Email: "a@example.com"}}, "p4ss"); err != nil {
+	if err := m.Welcome(reconcile.User{UID: "a", GoogleUser: reconcile.GoogleUser{Email: "a@example.com"}}, "fake-otp"); err != nil {
 		t.Fatal(err)
 	}
 	rec := <-got
-	for _, want := range []string{"MAIL FROM:<it@example.com>", "RCPT TO:<a@example.com>", "Temporary password: p4ss"} {
+	for _, want := range []string{"MAIL FROM:<it@example.com>", "RCPT TO:<a@example.com>", "Temporary password: fake-otp"} {
 		if !strings.Contains(rec, want) {
 			t.Errorf("missing %q in:\n%s", want, rec)
 		}

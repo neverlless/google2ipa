@@ -9,6 +9,7 @@ IMAGE=${IMAGE:-quay.io/freeipa/freeipa-server:almalinux-9}
 HOST=${IPA_HOST:-ipa.example.test}
 DOMAIN=${HOST#*.}
 REALM=$(tr '[:lower:]' '[:upper:]' <<<"$DOMAIN")
+# Throwaway credentials for the disposable test container only.
 PW=Secret123
 SVC_PW=Svc-Secret-123
 
