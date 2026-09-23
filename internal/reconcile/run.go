@@ -2,6 +2,7 @@ package reconcile
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"maps"
@@ -40,9 +41,17 @@ func forEach[T any](n int, items []T, fn func(T)) {
 
 // RunOnce performs one sync pass. It never returns an error: everything that
 // went wrong is in Report.Errors.
-func RunOnce(ctx context.Context, cfg *config.Config, src Source, tgt Target, n Notifier, now time.Time, dryRun bool, log *slog.Logger) Report {
-	r := Report{DryRun: dryRun}
+func RunOnce(ctx context.Context, cfg *config.Config, src Source, tgt Target, n Notifier, now time.Time, dryRun bool, log *slog.Logger) (r Report) {
+	r = Report{DryRun: dryRun}
 	p := &pass{r: &r, log: log}
+	if !dryRun {
+		// Also on early returns: an aborted pass is exactly what admins need to hear about.
+		defer func() {
+			if err := n.Summary(r); err != nil {
+				p.fail(fmt.Errorf("summary mail: %w", err))
+			}
+		}()
+	}
 
 	gusers, err := src.Users(ctx)
 	if err != nil {
@@ -81,6 +90,9 @@ func RunOnce(ctx context.Context, cfg *config.Config, src Source, tgt Target, n 
 	for _, uid := range plan.Unmanaged {
 		log.Warn("existing FreeIPA user is not managed by google2ipa; set sync.adopt_existing to take it over", "uid", uid)
 	}
+	for _, c := range plan.Conflicts {
+		p.fail(errors.New(c))
+	}
 	if plan.Braked {
 		p.fail(fmt.Errorf("safety brake: more than %d%% of managed users would be disabled; skipped disable/delete, check the Google source", cfg.Sync.MaxDisablePercent))
 	}
@@ -88,11 +100,23 @@ func RunOnce(ctx context.Context, cfg *config.Config, src Source, tgt Target, n 
 		for _, u := range plan.Create {
 			log.Info("would create", "uid", u.UID, "email", u.Email)
 		}
+		for _, uid := range plan.Adopt {
+			log.Info("would adopt", "uid", uid)
+		}
+		for _, uid := range plan.Enable {
+			log.Info("would enable", "uid", uid)
+		}
+		for _, uid := range slices.Sorted(maps.Keys(plan.AddGroups)) {
+			log.Info("would add to groups", "uid", uid, "groups", plan.AddGroups[uid])
+		}
+		for _, uid := range slices.Sorted(maps.Keys(plan.RemoveGroups)) {
+			log.Info("would remove from groups", "uid", uid, "groups", plan.RemoveGroups[uid])
+		}
 		for _, uid := range plan.Disable {
 			log.Info("would disable", "uid", uid)
 		}
 		for _, uid := range plan.Delete {
-			log.Info("would delete", "uid", uid)
+			log.Info("would delete", "uid", uid, "preserve", cfg.Offboarding.Preserve)
 		}
 		return r
 	}
@@ -155,8 +179,5 @@ func RunOnce(ctx context.Context, cfg *config.Config, src Source, tgt Target, n 
 		log.Info("deleted", "uid", uid, "preserved", cfg.Offboarding.Preserve)
 	})
 
-	if err := n.Summary(r); err != nil {
-		p.fail(fmt.Errorf("summary mail: %w", err))
-	}
 	return r
 }

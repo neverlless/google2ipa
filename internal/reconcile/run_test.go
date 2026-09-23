@@ -1,6 +1,7 @@
 package reconcile
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -137,5 +138,52 @@ func TestRunOnceGroupFailureIsolated(t *testing.T) {
 	r := RunOnce(context.Background(), c, fakeSrc{users: []GoogleUser{gu("a@example.com"), gu("b@example.com")}}, tgt, &fakeNotifier{}, now, false, quiet)
 	if len(r.Errors) != 1 || !slices.Contains(tgt.calls, "add[staff]:b") {
 		t.Errorf("errors=%v calls=%v", r.Errors, tgt.calls)
+	}
+}
+
+func TestRunOnceSummaryOnAbort(t *testing.T) {
+	n := &fakeNotifier{}
+	RunOnce(context.Background(), cfg(nil), fakeSrc{err: errors.New("403")}, &fakeTgt{}, n, now, false, quiet)
+	if len(n.reports) != 1 || n.reports[0].OK() {
+		t.Fatalf("admin must be told about an aborted pass: %+v", n.reports)
+	}
+}
+
+func TestRunOnceConflictIsError(t *testing.T) {
+	tgt := &fakeTgt{managed: map[string]IPAUser{"john": {UID: "john", Managed: true, Email: "john@a.com"}}}
+	r := RunOnce(context.Background(), cfg(nil), fakeSrc{users: []GoogleUser{gu("john@b.com")}}, tgt, &fakeNotifier{}, now, false, quiet)
+	if r.OK() || !strings.Contains(strings.Join(r.Errors, ";"), "john@a.com") || len(tgt.calls) != 0 {
+		t.Errorf("errors=%v calls=%v", r.Errors, tgt.calls)
+	}
+}
+
+func TestDryRunLogsEveryAction(t *testing.T) {
+	var buf bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&buf, nil))
+	tgt := &fakeTgt{managed: map[string]IPAUser{
+		"back": {UID: "back", Managed: true, Locked: true, LockedAt: ago(time.Hour), Groups: []string{"staff", "admins"}},
+	}}
+	n := &fakeNotifier{}
+	RunOnce(context.Background(), cfg(nil), fakeSrc{users: []GoogleUser{gu("back@example.com")}}, tgt, n, now, true, log)
+	out := buf.String()
+	for _, want := range []string{"would enable", "would remove from groups", "admins"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("dry-run log missing %q:\n%s", want, out)
+		}
+	}
+	if len(n.reports) != 0 {
+		t.Error("dry run must not mail")
+	}
+}
+
+type failingNotifier struct{ fakeNotifier }
+
+func (failingNotifier) Summary(Report) error { return errors.New("smtp down") }
+
+func TestSummaryFailureIsReported(t *testing.T) {
+	tgt := &fakeTgt{managed: map[string]IPAUser{}, existing: map[string]IPAUser{}}
+	r := RunOnce(context.Background(), cfg(nil), fakeSrc{}, tgt, &failingNotifier{}, now, false, quiet)
+	if r.OK() {
+		t.Error("summary mail failure must be reported")
 	}
 }
