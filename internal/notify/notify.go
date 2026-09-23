@@ -31,7 +31,10 @@ type Mailer struct {
 	url     string
 	welcome *template.Template
 	summary *template.Template
-	send    func(addr string, a smtp.Auth, from string, to []string, msg []byte) error
+	// lastErrs is the error set of the last summary mailed without changes,
+	// so a stuck problem is reported once per occurrence, not every pass.
+	lastErrs string
+	send     func(addr string, a smtp.Auth, from string, to []string, msg []byte) error
 }
 
 func New(cfg config.Notify, ipaURL string) (*Mailer, error) {
@@ -91,13 +94,22 @@ func (m *Mailer) Welcome(u reconcile.User, password string) error {
 }
 
 func (m *Mailer) Summary(r reconcile.Report) error {
-	if !m.cfg.Admin.Enabled || (r.Plan.Empty() && r.OK()) {
+	if !m.cfg.Admin.Enabled {
+		return nil
+	}
+	errs := strings.Join(r.Errors, "\n")
+	if r.Plan.Empty() && (r.OK() || errs == m.lastErrs) {
+		m.lastErrs = errs
 		return nil
 	}
 	p := r.Plan
 	changes := len(p.Create) + len(p.Adopt) + len(p.Enable) + len(p.Disable) + len(p.Delete) + len(p.AddGroups) + len(p.RemoveGroups)
 	subject := fmt.Sprintf("google2ipa: %d change(s), %d error(s)", changes, len(r.Errors))
-	return m.mail(m.cfg.Admin.To, subject, m.summary, r)
+	if err := m.mail(m.cfg.Admin.To, subject, m.summary, r); err != nil {
+		return err
+	}
+	m.lastErrs = errs
+	return nil
 }
 
 // timeout bounds a whole SMTP conversation; a variable so tests can shorten it.

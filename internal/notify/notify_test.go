@@ -229,3 +229,23 @@ func TestSendMailRealSMTP(t *testing.T) {
 		}
 	}
 }
+
+func TestSummaryNotRepeatedForSameErrors(t *testing.T) {
+	cfg := base
+	cfg.Admin = config.Admin{Enabled: true, To: []string{"ops@example.com"}}
+	m, out := mailer(t, cfg)
+	stuck := reconcile.Report{Errors: []string{"skip uid \"jane\": collision"}}
+	for range 3 {
+		_ = m.Summary(stuck)
+	}
+	if len(*out) != 1 {
+		t.Fatalf("same errors mailed %d times, want 1", len(*out))
+	}
+	_ = m.Summary(reconcile.Report{Errors: []string{"other"}})                                               // new error: mail
+	_ = m.Summary(reconcile.Report{Plan: reconcile.Plan{Disable: []string{"x"}}, Errors: []string{"other"}}) // changes: mail
+	_ = m.Summary(reconcile.Report{})                                                                        // all good: nothing
+	_ = m.Summary(stuck)                                                                                     // came back: mail
+	if len(*out) != 4 {
+		t.Errorf("sent %d, want 4", len(*out))
+	}
+}
