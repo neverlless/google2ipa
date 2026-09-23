@@ -55,6 +55,17 @@ func TestLoadUnsetVarIsError(t *testing.T) {
 	}
 }
 
+func TestEnvRefInCommentIgnored(t *testing.T) {
+	t.Setenv("G2I_TEST_PASS", "x")
+	cfg, err := Load(write(t, "# use ${ANY_VAR} for secrets\n"+minimal+"  # ${ALSO_NOT_SET}\n"))
+	if err != nil {
+		t.Fatalf("comments must not be expanded: %v", err)
+	}
+	if cfg.FreeIPA.Password != "x" {
+		t.Errorf("password = %q", cfg.FreeIPA.Password)
+	}
+}
+
 func TestLiteralDollarUntouched(t *testing.T) {
 	cfg, err := Load(write(t, strings.ReplaceAll(minimal, "${G2I_TEST_PASS}", "pa$$word")))
 	if err != nil {
@@ -122,5 +133,18 @@ func TestParseDuration(t *testing.T) {
 	}
 	if _, err := ParseDuration("-1d"); err == nil {
 		t.Error("negative days accepted")
+	}
+}
+
+func TestEnvValuesStayStrings(t *testing.T) {
+	for _, v := range []string{"12345", "true", "a: b # c", "- x", "'q\"", "0x10"} {
+		t.Setenv("G2I_TEST_PASS", v)
+		cfg, err := Load(write(t, minimal))
+		if err != nil {
+			t.Fatalf("%q: %v", v, err)
+		}
+		if cfg.FreeIPA.Password != v {
+			t.Errorf("password = %q, want %q", cfg.FreeIPA.Password, v)
+		}
 	}
 }

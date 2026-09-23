@@ -2,6 +2,7 @@
 package config
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -166,8 +167,13 @@ func Load(path string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Expand ${VAR} in values only, never in comments.
+	var doc yaml.Node
+	if err := yaml.Unmarshal(raw, &doc); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
 	var missing []string
-	expanded := envRef.ReplaceAllStringFunc(string(raw), func(m string) string {
+	expandScalars(&doc, func(m string) string {
 		name := envRef.FindStringSubmatch(m)[1]
 		v, ok := os.LookupEnv(name)
 		if !ok {
@@ -178,9 +184,13 @@ func Load(path string) (*Config, error) {
 	if len(missing) > 0 {
 		return nil, fmt.Errorf("unset environment variables referenced in config: %s", strings.Join(missing, ", "))
 	}
+	expanded, err := yaml.Marshal(&doc)
+	if err != nil {
+		return nil, err
+	}
 
 	cfg := Default()
-	dec := yaml.NewDecoder(strings.NewReader(expanded))
+	dec := yaml.NewDecoder(bytes.NewReader(expanded))
 	dec.KnownFields(true)
 	if err := dec.Decode(cfg); err != nil && !errors.Is(err, io.EOF) {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
@@ -190,6 +200,15 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("invalid config %s: %w", path, err)
 	}
 	return cfg, nil
+}
+
+func expandScalars(n *yaml.Node, repl func(string) string) {
+	if n.Kind == yaml.ScalarNode {
+		n.Value = envRef.ReplaceAllStringFunc(n.Value, repl)
+	}
+	for _, c := range n.Content {
+		expandScalars(c, repl)
+	}
 }
 
 func lower(in []string) []string {
