@@ -2,11 +2,15 @@ package notify
 
 import (
 	"errors"
+	"net"
 	"net/smtp"
+	"net/textproto"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/neverlless/google2ipa/internal/config"
 	"github.com/neverlless/google2ipa/internal/reconcile"
@@ -110,5 +114,118 @@ func TestSendError(t *testing.T) {
 	m.send = func(string, smtp.Auth, string, []string, []byte) error { return errors.New("down") }
 	if err := m.Welcome(reconcile.User{UID: "a", GoogleUser: reconcile.GoogleUser{Email: "a@example.com"}}, "p"); err == nil {
 		t.Error("want error")
+	}
+}
+
+func TestStalledSMTPTimesOut(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go func() { // accept and never speak
+		c, err := ln.Accept()
+		if err == nil {
+			defer c.Close()
+			time.Sleep(5 * time.Second)
+		}
+	}()
+	old := timeout
+	timeout = 300 * time.Millisecond
+	defer func() { timeout = old }()
+
+	_, port, _ := net.SplitHostPort(ln.Addr().String())
+	p, _ := strconv.Atoi(port)
+	cfg := config.Notify{SMTP: config.SMTP{Host: "127.0.0.1", Port: p, From: "it@example.com"},
+		Welcome: config.Welcome{Enabled: true, Subject: "s"}}
+	m, err := New(cfg, "https://ipa.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	if err := m.Welcome(reconcile.User{UID: "a", GoogleUser: reconcile.GoogleUser{Email: "a@example.com"}}, "p"); err == nil {
+		t.Fatal("want timeout error")
+	}
+	if time.Since(start) > 3*time.Second {
+		t.Errorf("took %v", time.Since(start))
+	}
+}
+
+func TestEnvelopeFromDisplayName(t *testing.T) {
+	cfg := base
+	cfg.SMTP.From = "IT Team <it@example.com>"
+	cfg.Welcome = config.Welcome{Enabled: true, Subject: "s"}
+	m, out := mailer(t, cfg)
+	if err := m.Welcome(reconcile.User{UID: "a", GoogleUser: reconcile.GoogleUser{Email: "a@example.com"}}, "p"); err != nil {
+		t.Fatal(err)
+	}
+	s := (*out)[0]
+	if s.from != "it@example.com" || !strings.Contains(s.msg, "From: IT Team <it@example.com>\r\n") {
+		t.Errorf("envelope %q, msg:\n%s", s.from, s.msg)
+	}
+}
+
+// fakeSMTP speaks just enough SMTP for one message and returns what it received.
+func fakeSMTP(t *testing.T) (port int, got <-chan string) {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	ch := make(chan string, 1)
+	go func() {
+		c, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer c.Close()
+		tp := textproto.NewConn(c)
+		var rec strings.Builder
+		_ = tp.PrintfLine("220 fake")
+		for {
+			line, err := tp.ReadLine()
+			if err != nil {
+				return
+			}
+			rec.WriteString(line + "\n")
+			switch cmd := strings.ToUpper(strings.Fields(line + " x")[0]); cmd {
+			case "EHLO", "HELO":
+				_ = tp.PrintfLine("250 fake")
+			case "DATA":
+				_ = tp.PrintfLine("354 go")
+				body, _ := tp.ReadDotLines()
+				rec.WriteString(strings.Join(body, "\n") + "\n")
+				_ = tp.PrintfLine("250 ok")
+			case "QUIT":
+				_ = tp.PrintfLine("221 bye")
+				ch <- rec.String()
+				return
+			default:
+				_ = tp.PrintfLine("250 ok")
+			}
+		}
+	}()
+	_, ps, _ := net.SplitHostPort(ln.Addr().String())
+	port, _ = strconv.Atoi(ps)
+	return port, ch
+}
+
+func TestSendMailRealSMTP(t *testing.T) {
+	port, got := fakeSMTP(t)
+	cfg := config.Notify{SMTP: config.SMTP{Host: "127.0.0.1", Port: port, From: "IT <it@example.com>"},
+		Welcome: config.Welcome{Enabled: true, Subject: "hi"}}
+	m, err := New(cfg, "https://ipa.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Welcome(reconcile.User{UID: "a", GoogleUser: reconcile.GoogleUser{Email: "a@example.com"}}, "p4ss"); err != nil {
+		t.Fatal(err)
+	}
+	rec := <-got
+	for _, want := range []string{"MAIL FROM:<it@example.com>", "RCPT TO:<a@example.com>", "Temporary password: p4ss"} {
+		if !strings.Contains(rec, want) {
+			t.Errorf("missing %q in:\n%s", want, rec)
+		}
 	}
 }

@@ -3,10 +3,12 @@ package notify
 
 import (
 	"bytes"
+	"crypto/tls"
 	"embed"
 	"fmt"
 	"mime"
 	"net"
+	"net/mail"
 	"net/smtp"
 	"strconv"
 	"strings"
@@ -33,7 +35,7 @@ type Mailer struct {
 }
 
 func New(cfg config.Notify, ipaURL string) (*Mailer, error) {
-	m := &Mailer{cfg: cfg, url: ipaURL, send: smtp.SendMail}
+	m := &Mailer{cfg: cfg, url: ipaURL, send: sendMail}
 	var err error
 	if cfg.Welcome.TemplateFile != "" {
 		m.welcome, err = template.ParseFiles(cfg.Welcome.TemplateFile)
@@ -68,7 +70,11 @@ func (m *Mailer) mail(to []string, subject string, tpl *template.Template, data 
 		auth = smtp.PlainAuth("", m.cfg.SMTP.Username, m.cfg.SMTP.Password, m.cfg.SMTP.Host)
 	}
 	addr := net.JoinHostPort(m.cfg.SMTP.Host, strconv.Itoa(m.cfg.SMTP.Port))
-	if err := m.send(addr, auth, m.cfg.SMTP.From, to, msg.Bytes()); err != nil {
+	from := m.cfg.SMTP.From
+	if a, err := mail.ParseAddress(from); err == nil {
+		from = a.Address // "IT <it@x>" is valid in the header, not in MAIL FROM
+	}
+	if err := m.send(addr, auth, from, to, msg.Bytes()); err != nil {
 		return fmt.Errorf("smtp %s: %w", addr, err)
 	}
 	return nil
@@ -92,4 +98,61 @@ func (m *Mailer) Summary(r reconcile.Report) error {
 	changes := len(p.Create) + len(p.Adopt) + len(p.Enable) + len(p.Disable) + len(p.Delete) + len(p.AddGroups) + len(p.RemoveGroups)
 	subject := fmt.Sprintf("google2ipa: %d change(s), %d error(s)", changes, len(r.Errors))
 	return m.mail(m.cfg.Admin.To, subject, m.summary, r)
+}
+
+// timeout bounds a whole SMTP conversation; a variable so tests can shorten it.
+var timeout = 30 * time.Second
+
+// sendMail is smtp.SendMail with a deadline, plus implicit TLS on port 465.
+func sendMail(addr string, auth smtp.Auth, from string, to []string, msg []byte) error {
+	host, port, _ := net.SplitHostPort(addr)
+	d := &net.Dialer{Timeout: timeout}
+	var conn net.Conn
+	var err error
+	if port == "465" {
+		conn, err = tls.DialWithDialer(d, "tcp", addr, &tls.Config{ServerName: host, MinVersion: tls.VersionTLS12})
+	} else {
+		conn, err = d.Dial("tcp", addr)
+	}
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		return err
+	}
+	c, err := smtp.NewClient(conn, host)
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+	if ok, _ := c.Extension("STARTTLS"); ok && port != "465" {
+		if err := c.StartTLS(&tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}); err != nil {
+			return err
+		}
+	}
+	if auth != nil {
+		if err := c.Auth(auth); err != nil {
+			return err
+		}
+	}
+	if err := c.Mail(from); err != nil {
+		return err
+	}
+	for _, rcpt := range to {
+		if err := c.Rcpt(rcpt); err != nil {
+			return err
+		}
+	}
+	w, err := c.Data()
+	if err != nil {
+		return err
+	}
+	if _, err := w.Write(msg); err != nil {
+		return err
+	}
+	if err := w.Close(); err != nil {
+		return err
+	}
+	return c.Quit()
 }
