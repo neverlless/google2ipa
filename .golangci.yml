@@ -1,0 +1,16 @@
+version: "2"
+linters:
+  enable: [errorlint, gosec, misspell, revive, bodyclose, unconvert, gocritic, nolintlint]
+  settings:
+    gosec:
+      excludes:
+        - G304 # reading operator-supplied file paths is the point of a CLI config
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+formatters:
+  enable: [gofmt, goimports]
+  settings:
+    goimports:
+      local-prefixes: [github.com/neverlless/google2ipa]
