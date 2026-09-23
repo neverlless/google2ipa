@@ -3,10 +3,9 @@
 **Sync Google Workspace users and groups into FreeIPA / Red Hat IdM.**
 
 [![CI](https://github.com/neverlless/google2ipa/actions/workflows/ci.yml/badge.svg)](https://github.com/neverlless/google2ipa/actions/workflows/ci.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/neverlless/google2ipa)](https://goreportcard.com/report/github.com/neverlless/google2ipa)
 [![Release](https://img.shields.io/github/v/release/neverlless/google2ipa)](https://github.com/neverlless/google2ipa/releases)
 [![Go version](https://img.shields.io/github/go-mod/go-version/neverlless/google2ipa)](go.mod)
-[![License](https://img.shields.io/github/license/neverlless/google2ipa)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
 google2ipa treats Google Workspace as the source of truth. It creates FreeIPA
 accounts for new employees, keeps group memberships in step with Google

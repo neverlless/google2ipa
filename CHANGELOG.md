@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-23
+
 ### Added
 
 - `sync.max_username_length` (default 32): too-long usernames are skipped with a clear error.
@@ -36,5 +38,6 @@ Initial public release.
 - `--dry-run`, `--interval`, JSON or text logs, admin summary mail.
 - Distroless multi-arch container image signed with cosign; Kubernetes and Docker Compose examples.
 
-[Unreleased]: https://github.com/neverlless/google2ipa/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/neverlless/google2ipa/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/neverlless/google2ipa/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/neverlless/google2ipa/releases/tag/v0.1.0
