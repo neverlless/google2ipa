@@ -7,6 +7,15 @@
 [![Go version](https://img.shields.io/github/go-mod/go-version/neverlless/google2ipa)](go.mod)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
+> [!IMPORTANT]
+> **google2ipa now lives in [mokey](https://github.com/neverlless/mokey).**
+> Since mokey v2.12 the same sync runs inside mokey as
+> [Directory sync](https://neverlless.github.io/mokey/guides/directory-sync/),
+> with a dry run and an admin page, and it keeps your managed group. The
+> guide has a [migration section](https://neverlless.github.io/mokey/guides/directory-sync/#migrating-from-google2ipa)
+> with the config key table. This repository is archived and gets no further
+> updates.
+
 google2ipa treats Google Workspace as the source of truth. It creates FreeIPA
 accounts for new employees, keeps group memberships in step with Google
 groups, and locks and later removes the accounts of people who left. It ships
